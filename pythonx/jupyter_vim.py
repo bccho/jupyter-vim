@@ -487,3 +487,42 @@ def signal_kernel(sig=signal.SIGTERM):
 
 #==============================================================================
 #==============================================================================
+
+
+#==============================================================================
+# BC's helper functions for cell navigation
+#==============================================================================
+def to_next_cell():
+    """Move to next cell separator"""
+    cur_buf = vim.current.buffer
+    (cur_line, cur_col) = vim.current.window.cursor
+
+    # Search downwards for cell separator
+    new_line = cur_line
+    while new_line - 1 < len(cur_buf)-1 and \
+            not is_cell_separator(cur_buf[new_line - 1]):
+        new_line += 1
+
+    # Move to line after the cell separator and bound to buffer limits
+    new_line += 1
+    new_line = max(1, min(new_line, len(cur_buf)))
+
+    # Set cursor position
+    vim.current.window.cursor = (new_line, cur_col)
+
+def to_prev_cell():
+    """Move to previous cell separator"""
+    cur_buf = vim.current.buffer
+    (cur_line, cur_col) = vim.current.window.cursor
+
+    # Search upwards for cell separator
+    new_line = cur_line
+    while new_line - 1 > 0 and not is_cell_separator(cur_buf[new_line - 1]):
+        new_line -= 1
+
+    # Move to line before the cell separator and bound to buffer limits
+    new_line -= 1
+    new_line = max(1, min(new_line, len(cur_buf)))
+
+    # Set cursor position
+    vim.current.window.cursor = (new_line, cur_col)
