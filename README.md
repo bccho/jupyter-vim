@@ -191,6 +191,24 @@ nnoremap <buffer> <silent> <localleader>b :PythonSetBreak<CR>
 
 Set `let g:jupyter_mapkeys = 0` in your `.vimrc` to prevent the default keybindings from being made.
 
+For cell navigation, put this in your `.vimrc`:
+
+```vim
+function! NextPythonCell()
+    Pythonx jupyter_vim.to_next_cell()
+endfunction
+
+function! PrevPythonCell()
+    Pythonx jupyter_vim.to_prev_cell()
+endfunction
+
+function SetJupyterKeybindings()
+    # other stuff here
+    nnoremap <buffer> <TAB> :call NextPythonCell()<CR>'
+    nnoremap <buffer> <S-TAB> :call PrevPythonCell()<CR>
+endfunction
+```
+
 ## Info
 
 Once we fell in love with Vim, we couldn't bear having to jump back and forth
