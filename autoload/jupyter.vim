@@ -6,7 +6,7 @@
 "  Description: Autoload vim functions for use in jupyter-vim plugin
 "
 "=============================================================================
-"        Python Initialization: 
+"        Python Initialization:
 "-----------------------------------------------------------------------------
 " Neovim doesn't have the pythonx command, so we define a new command Pythonx
 " that works for both vim and neovim.
@@ -19,7 +19,7 @@ elseif has('python')
 endif
 
 " See ~/.vim/bundle/jedi-vim/autoload/jedi.vim for initialization routine
-function! s:init_python() abort 
+function! s:init_python() abort
     let s:init_outcome = 0
     let init_lines = [
           \ 'import sys; import os; import vim',
@@ -70,17 +70,19 @@ function! jupyter#init_python() abort
     return s:_init_python
 endfunction
 
-"----------------------------------------------------------------------------- 
-"        Vim -> Jupyter Public Functions: 
 "-----------------------------------------------------------------------------
-function! jupyter#Connect() abort 
+"        Vim -> Jupyter Public Functions:
+"-----------------------------------------------------------------------------
+function! jupyter#Connect(...) abort
+    let cfile_glob = get(a:, 1, 'kernel-*.json')
     " call jupyter#init_python()
     Pythonx jupyter_vim.connect_to_kernel(
                 \ jupyter_vim.vim2py_str(
-                \     vim.current.buffer.vars['jupyter_kernel_type']))
+                \     vim.current.buffer.vars['jupyter_kernel_type']),
+                \ cfile_glob=vim.eval('cfile_glob'))
 endfunction
 
-function! jupyter#JupyterCd(...) abort 
+function! jupyter#JupyterCd(...) abort
     " Behaves just like typical `cd`.
     let l:dirname = a:0 ? a:1 : ''
     if b:jupyter_kernel_type == 'python'
@@ -93,7 +95,7 @@ function! jupyter#JupyterCd(...) abort
     endif
 endfunction
 
-function! jupyter#RunFile(...) abort 
+function! jupyter#RunFile(...) abort
     " filename is the last argument on the command line
     let l:flags = (a:0 > 1) ? join(a:000[:-2], ' ') : ''
     let l:filename = a:0 ? a:000[-1] : expand("%:p")
@@ -114,20 +116,20 @@ function! jupyter#RunFile(...) abort
     endif
 endfunction
 
-function! jupyter#SendCell() abort 
+function! jupyter#SendCell() abort
     Pythonx jupyter_vim.run_cell()
 endfunction
 
-function! jupyter#SendCode(code) abort 
+function! jupyter#SendCode(code) abort
     " NOTE: 'run_command' gives more checks than just raw 'send'
     Pythonx jupyter_vim.run_command(vim.eval('a:code'))
 endfunction
 
-function! jupyter#SendRange() range abort 
+function! jupyter#SendRange() range abort
     execute a:firstline . ',' . a:lastline . 'Pythonx jupyter_vim.send_range()'
 endfunction
 
-function! jupyter#SendCount(count) abort 
+function! jupyter#SendCount(count) abort
     " TODO move this function to pure(ish) python like SendRange
     let sel_save = &selection
     let cb_save = &clipboard
@@ -144,7 +146,7 @@ function! jupyter#SendCount(count) abort
     call jupyter#SendCode(l:cmd)
 endfunction
 
-function! jupyter#TerminateKernel(kill, ...) abort 
+function! jupyter#TerminateKernel(kill, ...) abort
     if a:kill
         let l:sig='SIGKILL'
     elseif a:0 > 0
@@ -157,12 +159,12 @@ function! jupyter#TerminateKernel(kill, ...) abort
     execute 'Pythonx jupyter_vim.signal_kernel(jupyter_vim.signal.'.l:sig.')'
 endfunction
 
-function! jupyter#UpdateShell() abort 
+function! jupyter#UpdateShell() abort
     Pythonx jupyter_vim.update_console_msgs()
 endfunction
 
-"----------------------------------------------------------------------------- 
-"        Operator Function: 
+"-----------------------------------------------------------------------------
+"        Operator Function:
 "-----------------------------------------------------------------------------
 " TODO rewrite this function as a general wrapper that accepts a function (of
 " one argument) that will act on the text object, and returns an
@@ -205,10 +207,10 @@ function! s:opfunc(type)
     call jupyter#SendCode(l:cmd)
 endfunction
 
-"----------------------------------------------------------------------------- 
-"        Auxiliary Functions: 
 "-----------------------------------------------------------------------------
-function! jupyter#PythonDbstop() 
+"        Auxiliary Functions:
+"-----------------------------------------------------------------------------
+function! jupyter#PythonDbstop()
     " Set a debugging breakpoint for use with pdb
     normal! Oimport pdb; pdb.set_trace()j
 endfunction
@@ -216,7 +218,7 @@ endfunction
 function! jupyter#MakeStandardCommands()
     " Standard commands, called from each ftplugin so that we only map the
     " keys buffer-local for select filetypes.
-    command! -buffer -nargs=0    JupyterConnect         call jupyter#Connect()
+    command! -buffer -nargs=?    JupyterConnect         call jupyter#Connect(<f-args>)
     command! -buffer -nargs=1    JupyterSendCode        call jupyter#SendCode(<args>)
     command! -buffer -count      JupyterSendCount       call jupyter#SendCount(<count>)
     command! -buffer -range -bar JupyterSendRange       <line1>,<line2>call jupyter#SendRange()
@@ -246,7 +248,7 @@ function! jupyter#MapStandardKeys()
 endfunction
 
 " NOTE: Generally unused except for communication debugging
-function! jupyter#OpenJupyterTerm() abort 
+function! jupyter#OpenJupyterTerm() abort
     " Set up console display window
     " If we're in the console display already, just go to the bottom.
     " Otherwise, create a new buffer in a split (or jump to it if open)
@@ -287,8 +289,8 @@ function! jupyter#OpenJupyterTerm() abort
     return 1
 endfunction
 
-"----------------------------------------------------------------------------- 
-"        Create <Plug> for user mappings 
+"-----------------------------------------------------------------------------
+"        Create <Plug> for user mappings
 "-----------------------------------------------------------------------------
 noremap <silent> <Plug>JupyterRunTextObj    :<C-u>set operatorfunc=<SID>opfunc<CR>g@
 noremap <silent> <Plug>JupyterRunVisual     :<C-u>call <SID>opfunc(visualmode())<CR>

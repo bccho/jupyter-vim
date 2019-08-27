@@ -25,13 +25,13 @@ except ImportError:
 
 _install_instructions = """You *must* install the jupyter package into the
 Python that your vim is linked against. If you are seeing this message, this
-usually means either: 
+usually means either:
     (1) configuring vim to automatically load a virtualenv that has Jupyter
         installed and whose Python interpreter is the same version that your
         vim is compiled against
     (2) installing Jupyter using the system Python that vim is using, or
     (3) recompiling Vim against the Python where you already have Jupyter
-        installed. 
+        installed.
 This is only a requirement to allow Vim to speak with a Jupyter kernel using
 Jupyter's own machinery. It does *not* mean that the Jupyter instance with
 which you communicate via jupyter-vim needs to be running the same version of
@@ -182,47 +182,62 @@ def strip_color_escapes(s):
 #------------------------------------------------------------------------------
 #        Major Function Definitions:
 #------------------------------------------------------------------------------
-def connect_to_kernel(kernel_type):
+def connect_kernel_from_file(kernel_type, connection_file):
+    from jupyter_client import KernelManager
+    # Create the kernel manager and connect a client
+    # See: <http://jupyter-client.readthedocs.io/en/stable/api/client.html>
+    km = KernelManager(connection_file=connection_file)
+    km.load_connection_file()
+    kc = km.client()
+    kc.start_channels()
+
+    # Alias execute function
+    def _send(msg, **kwargs):
+        """Send a message to the kernel client."""
+        # Include dedent of msg so we don't get odd indentation errors.
+        return kc.execute(textwrap.dedent(msg), **kwargs)
+    send = _send
+
+    # Ping the kernel
+    kc.kernel_info()
+    try:
+        reply = kc.get_shell_msg(timeout=1)
+    except Empty:
+        return {"connected": False}
+    else:
+        # pid = get_pid(kernel_type)  # Ask kernel for its PID
+        return {"connected": True, "kc": kc, "send": send}
+
+def connect_to_kernel(kernel_type, cfile_glob="kernel-*.json"):
     """Create kernel manager from existing connection file."""
-    from jupyter_client import KernelManager, find_connection_file
+    from jupyter_client import find_connection_file
 
     global kc, pid, send
+
+    # Disconnect if already connected
+    if check_connection():
+        disconnect_from_kernel()
 
     # Test if connection is alive
     connected = check_connection()
     attempt = 0
     max_attempts = 3
+    try:
+        cfile = find_connection_file(cfile_glob)
+        vim_echom("connecting with file {}".format(os.path.basename(cfile)))
+    except IOError:
+        vim_echom("kernel connection attempt failed - no kernel file",
+                  style="Error")
+        return
+
     while not connected and attempt < max_attempts:
         attempt += 1
-        try:
-            cfile = find_connection_file()  # default filename='kernel-*.json'
-        except IOError:
-            vim_echom("kernel connection attempt {:d} failed - no kernel file"\
-                      .format(attempt), style="Error")
-            continue
 
-        # Create the kernel manager and connect a client
-        # See: <http://jupyter-client.readthedocs.io/en/stable/api/client.html>
-        km = KernelManager(connection_file=cfile)
-        km.load_connection_file()
-        kc = km.client()
-        kc.start_channels()
-
-        # Alias execute function
-        def _send(msg, **kwargs):
-            """Send a message to the kernel client."""
-            # Include dedent of msg so we don't get odd indentation errors.
-            return kc.execute(textwrap.dedent(msg), **kwargs)
-        send = _send
-
-        # Ping the kernel
-        kc.kernel_info()
-        try:
-            reply = kc.get_shell_msg(timeout=1)
-        except Empty:
-            continue
-        else:
-            connected = True
+        res = connect_kernel_from_file(kernel_type, cfile)
+        connected = res["connected"]
+        if connected:
+            kc = res["kc"]
+            send = res["send"]
 
     if connected:
         # Send command so that monitor knows vim is commected
@@ -231,7 +246,8 @@ def connect_to_kernel(kernel_type):
         vim_echom('kernel connection successful! pid = {}'.format(pid),
                   style='Question')
     else:
-        kc.stop_channels()
+        if kc:
+            kc.stop_channels()
         vim_echom('kernel connection attempt timed out', style='Error')
 
 def disconnect_from_kernel():
