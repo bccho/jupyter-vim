@@ -245,6 +245,7 @@ def connect_to_kernel(kernel_type, cfile_glob="kernel-*.json"):
         pid = get_pid(kernel_type)  # Ask kernel for its PID
         vim_echom('kernel connection successful! pid = {}'.format(pid),
                   style='Question')
+        send("# Connected to vim: file {}".format(os.path.basename(vim.current.buffer.name)))
     else:
         if kc:
             kc.stop_channels()
