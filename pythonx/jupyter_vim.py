@@ -166,6 +166,40 @@ def get_pid(kernel_type):
 
     return the_pid
 
+def temporary_connect_query(connection_file, code, retvar):
+    # connect
+    from jupyter_client import KernelManager
+    _km = KernelManager(connection_file=connection_file)
+    _km.load_connection_file()
+    _kc = _km.client()
+    _kc.start_channels()
+
+    def _send(msg, **kwargs):
+        """Send a message to the kernel client."""
+        # Include dedent of msg so we don't get odd indentation errors.
+        return _kc.execute(textwrap.dedent(msg), **kwargs)
+    # send code
+    msg_id = _send(code, silent=True, user_expressions={"_ret": retvar})
+
+    try:
+        reply = get_reply_msg(msg_id, _kc=_kc)
+    except Empty:
+        vim_echom("no reply from jupyter kernel", "WarningMsg")
+        return -1
+
+    # get result
+    retval = None
+    try:
+        # Requires the fix for https://github.com/JuliaLang/IJulia.jl/issues/815
+        retval = reply["content"]["user_expressions"]["_ret"]["data"]["text/plain"]
+    except KeyError:
+        vim_echom("Could not get return value, kernel not ready?")
+
+    # disconnect
+    _kc.stop_channels()
+
+    return retval
+
 def is_cell_separator(line):
     """ Determine whether a given line is a cell separator """
     # TODO allow users to define their own cell separators
@@ -182,6 +216,18 @@ def strip_color_escapes(s):
 #------------------------------------------------------------------------------
 #        Major Function Definitions:
 #------------------------------------------------------------------------------
+def find_kernels(sep="\t"):
+    from jupyter_core.paths import jupyter_runtime_dir
+    import glob
+    cfiles = glob.glob(os.path.join(jupyter_runtime_dir(), "kernel-*.json"))
+    cfiles = ["{}{}purpose: {}".format(
+        os.path.basename(p), sep,
+        str(temporary_connect_query(
+            p, "_purpose = purpose if 'purpose' in globals() else 'undefined'", "_purpose"))
+    ) for p in cfiles]
+    return cfiles
+
+
 def connect_kernel_from_file(kernel_type, connection_file):
     from jupyter_client import KernelManager
     # Create the kernel manager and connect a client
@@ -329,14 +375,16 @@ def handle_messages():
 #------------------------------------------------------------------------------
 #        Communicate with Kernel
 #------------------------------------------------------------------------------
-def get_reply_msg(msg_id):
+def get_reply_msg(msg_id, _kc=None):
     """Get kernel reply from sent client message with msg_id."""
     # TODO handle 'is_complete' requests?
     # <http://jupyter-client.readthedocs.io/en/stable/messaging.html#code-completeness>
+    if _kc is None:
+        _kc = kc
     while True:
         try:
             # TODO try block=False
-            m = kc.get_shell_msg(block=False, timeout=1)
+            m = _kc.get_shell_msg(block=False, timeout=1)
         except Empty:
             continue
         if m['parent_header']['msg_id'] == msg_id:
